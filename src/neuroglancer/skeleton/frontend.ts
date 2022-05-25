@@ -381,13 +381,26 @@ export class SkeletonLayer extends RefCounted {
 
     const vertexAttributes = this.vertexAttributes = [vertexPositionAttribute];
 
+    const dataType2glslDataType : any = {};
+    dataType2glslDataType[DataType.FLOAT32] = 'float';
+    dataType2glslDataType[DataType.UINT8] = 'uint';
+    dataType2glslDataType[DataType.UINT16] = 'uint';
+    dataType2glslDataType[DataType.UINT32] = 'uint';
+    dataType2glslDataType[DataType.INT8] = 'int';
+    dataType2glslDataType[DataType.INT16] = 'int';
+    dataType2glslDataType[DataType.INT32] = 'int';
+
     for (let [name, info] of source.vertexAttributes) {
       vertexAttributes.push({
         name,
         dataType: info.dataType,
         numComponents: info.numComponents,
         webglDataType: getWebglDataType(info.dataType),
-        glslDataType: info.numComponents > 1 ? `vec${info.numComponents}` : 'float',
+        glslDataType: (
+          (info.numComponents > 1) 
+            ? `vec${info.numComponents}` 
+            : dataType2glslDataType[info.dataType]
+        )
       });
     }
   }
@@ -560,6 +573,8 @@ function getWebglDataType(dataType: DataType) {
   switch (dataType) {
     case DataType.FLOAT32:
       return WebGL2RenderingContext.FLOAT;
+    case DataType.UINT8:
+      return WebGL2RenderingContext.UNSIGNED_BYTE;
     default:
       throw new Error(`Data type not supported by WebGL: ${DataType[dataType]}`);
   }
