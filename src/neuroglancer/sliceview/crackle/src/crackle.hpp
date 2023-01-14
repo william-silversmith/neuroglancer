@@ -215,20 +215,10 @@ LABEL* decompress(
 		return output;
 	}
 
-	if (header.fortran_order) {
-		for (uint64_t i = 0; i < voxels; i++) {
-			output[i] = label_map[cc_labels[i]];
-		}
-	}
-	else { // cc_labels is in fortran order so transpose it
-		uint64_t i = 0;
-		for (uint64_t z = 0; z < static_cast<uint64_t>(szr); z++) {
-			for (uint64_t y = 0; y < header.sy; y++) {
-				for (uint64_t x = 0; x < header.sx; x++, i++) {
-					output[z + szr * (y + header.sy * x)] = label_map[cc_labels[i]];
-				}
-			}
-		}
+	// always decode in fortran order
+	// b/c that's what Neuroglancer likes
+	for (uint64_t i = 0; i < voxels; i++) {
+		output[i] = label_map[cc_labels[i]];
 	}
 
 	return output;
