@@ -44,7 +44,7 @@ async function loadCrackleModule () {
 
 // not a full implementation of read header, just the parts we need
 function readHeader(buffer: Uint8Array) 
-  : {sx:number,sy:number,sz:number,sw:number,dataWidth:number} 
+  : {sx:number,sy:number,sz:number,dataWidth:number} 
 {
   // check for header "crkl"
   const magic = (
@@ -67,7 +67,7 @@ function readHeader(buffer: Uint8Array)
   const sy = bufview.getUint32(11, /*littleEndian=*/true);
   const sz = bufview.getUint32(15, /*littleEndian=*/true);
 
-  return {sx,sy,sz,sw,dataWidth};
+  return {sx,sy,sz,dataWidth};
 }
 
 export async function decompressCrackle(
@@ -75,9 +75,9 @@ export async function decompressCrackle(
 ) : Promise<Uint8Array> {
 
   const m = await loadCrackleModule();
-  let {sx,sy,sz,sw,dataWidth} = readHeader(buffer);
+  let {sx,sy,sz,dataWidth} = readHeader(buffer);
 
-  const voxels = sx * sy * sz * sw;
+  const voxels = sx * sy * sz;
   const nbytes = voxels * dataWidth;
   if (nbytes < 0) {
     throw new Error(`crackle: Failed to decode image size. image size: ${nbytes}`);
