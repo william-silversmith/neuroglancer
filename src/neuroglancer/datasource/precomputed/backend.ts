@@ -30,6 +30,7 @@ import {decodeSkeletonChunk} from 'neuroglancer/skeleton/decode_precomputed_skel
 import {ChunkDecoder} from 'neuroglancer/sliceview/backend_chunk_decoders';
 import {decodeCompressedSegmentationChunk} from 'neuroglancer/sliceview/backend_chunk_decoders/compressed_segmentation';
 import {decodeCompressoChunk} from 'neuroglancer/sliceview/backend_chunk_decoders/compresso';
+import {decodeCrackleChunk} from 'neuroglancer/sliceview/backend_chunk_decoders/crackle';
 import {decodeJpegChunk} from 'neuroglancer/sliceview/backend_chunk_decoders/jpeg';
 import {decodePngChunk} from 'neuroglancer/sliceview/backend_chunk_decoders/png';
 import {decodeRawChunk} from 'neuroglancer/sliceview/backend_chunk_decoders/raw';
@@ -257,6 +258,7 @@ chunkDecoders.set(VolumeChunkEncoding.JPEG, decodeJpegChunk);
 chunkDecoders.set(VolumeChunkEncoding.COMPRESSED_SEGMENTATION, decodeCompressedSegmentationChunk);
 chunkDecoders.set(VolumeChunkEncoding.COMPRESSO, decodeCompressoChunk);
 chunkDecoders.set(VolumeChunkEncoding.PNG, decodePngChunk);
+chunkDecoders.set(VolumeChunkEncoding.CRACKLE, decodeCrackleChunk);
 
 @registerSharedObject() export class PrecomputedVolumeChunkSource extends
 (WithParameters(WithSharedCredentialsProviderCounterpart<SpecialProtocolCredentials>()(VolumeChunkSource), VolumeChunkSourceParameters)) {
