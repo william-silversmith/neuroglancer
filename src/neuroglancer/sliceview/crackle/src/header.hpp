@@ -45,6 +45,7 @@ public:
 	uint32_t grid_size;
 	uint32_t num_label_bytes;
 	bool fortran_order;
+	uint8_t markov_model_order;
 
 	CrackleHeader() :
 		format_version(0),
@@ -53,7 +54,8 @@ public:
 		is_signed(false),
 		data_width(1), stored_data_width(1),
 		sx(1), sy(1), sz(1), grid_size(2147483648),
-		num_label_bytes(0), fortran_order(true)
+		num_label_bytes(0), fortran_order(true),
+		markov_model_order(0)
 	{}
 
 	CrackleHeader(
@@ -66,7 +68,8 @@ public:
 		const uint32_t _sx, const uint32_t _sy, const uint32_t _sz,
 		const uint32_t _grid_size,
 		const uint32_t _num_label_bytes,
-		const bool _fortran_order
+		const bool _fortran_order,
+		const uint8_t _markov_model_order
 	) : 
 		format_version(_format_version),
 		label_format(_label_fmt),
@@ -76,7 +79,8 @@ public:
 		sx(_sx), sy(_sy), sz(_sz),
 		grid_size(_grid_size),
 		num_label_bytes(_num_label_bytes), 
-		fortran_order(_fortran_order)
+		fortran_order(_fortran_order), 
+		markov_model_order(_markov_model_order)
 	{}
 
 	void assign_from_buffer(const unsigned char* buf) {
@@ -98,6 +102,7 @@ public:
 		label_format = static_cast<LabelFormat>((format_bytes & 0b01100000) >> 5);
 		fortran_order = static_cast<bool>((format_bytes & 0b10000000) >> 7);
 		is_signed = static_cast<bool>((format_bytes >> 8) & 0b1);
+		markov_model_order = static_cast<uint8_t>((format_bytes >> 9) & 0b1111);
 	}
 
 	CrackleHeader(const unsigned char* buf) {
@@ -132,37 +137,6 @@ public:
 		return ngrids;
 	}
 
-	size_t tochars(std::vector<unsigned char> &buf, size_t idx = 0) const {
-		size_t i = idx;
-		for (int j = 0; j < 4; j++, i++) {
-			buf[i] = magic[j];
-		}
-
-		uint16_t format_bytes = 0;
-		format_bytes |= static_cast<uint16_t>(log2(data_width));
-		format_bytes |= static_cast<uint16_t>(log2(stored_data_width)) << 2;
-		format_bytes |= static_cast<uint16_t>(crack_format) << 4;
-		format_bytes |= static_cast<uint16_t>(label_format) << 5;
-		format_bytes |= static_cast<uint16_t>(fortran_order) << 7;
-		format_bytes |= static_cast<uint16_t>(is_signed) << 8;
-
-		i += lib::itoc(format_version, buf, i);
-		i += lib::itoc(format_bytes, buf, i);
-		i += lib::itoc(sx, buf, i);
-		i += lib::itoc(sy, buf, i);
-		i += lib::itoc(sz, buf, i);
-		i += lib::itoc(static_cast<uint8_t>(log2(grid_size)), buf, i);
-		i += lib::itoc(num_label_bytes, buf, i);
-
-		return i - idx;
-	}
-
-	std::vector<unsigned char> tobytes() const {
-		std::vector<unsigned char> buf(header_size);
-		tochars(buf);
-		return buf;
-	}
-
 	uint64_t nbytes() const {
 		return (
 			  static_cast<uint64_t>(sx) 
@@ -170,6 +144,21 @@ public:
 			* static_cast<uint64_t>(sz) 
 			* static_cast<uint64_t>(data_width)
 		);
+	}
+
+	uint64_t markov_model_bytes() const {
+		if (markov_model_order == 0) {
+			return 0;
+		}
+		uint64_t model_size = pow(4, 
+			std::min(
+				static_cast<uint64_t>(markov_model_order), 
+				static_cast<uint64_t>(15)
+			)
+		);
+		// model is packed so only 5 bits are used
+		// for each row. Round up.
+		return ((model_size * 5) + 4) / 8;
 	}
 
 	static bool valid_header(const unsigned char* buf) {
