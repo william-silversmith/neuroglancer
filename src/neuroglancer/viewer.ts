@@ -33,7 +33,7 @@ import {DisplayContext, TrackableWindowedViewport} from 'neuroglancer/display_co
 import {HelpPanelState, InputEventBindingHelpDialog} from 'neuroglancer/help/input_event_bindings';
 import {addNewLayer, LayerManager, LayerSelectedValues, MouseSelectionState, SelectedLayerState, TopLevelLayerListSpecification, TrackableDataSelectionState} from 'neuroglancer/layer';
 import {RootLayoutContainer} from 'neuroglancer/layer_groups_layout';
-import {DisplayPose, NavigationState, OrientationState, Position, TrackableCrossSectionZoom, TrackableDepthRange, TrackableDisplayDimensions, TrackableProjectionZoom, TrackableRelativeDisplayScales, WatchableDisplayDimensionRenderInfo} from 'neuroglancer/navigation_state';
+import {CoordinateSpacePlaybackVelocity, DisplayPose, NavigationState, OrientationState, PlaybackManager, Position, TrackableCrossSectionZoom, TrackableDepthRange, TrackableDisplayDimensions, TrackableProjectionZoom, TrackableRelativeDisplayScales, WatchableDisplayDimensionRenderInfo} from 'neuroglancer/navigation_state';
 import {overlaysOpen} from 'neuroglancer/overlay';
 import {allRenderLayerRoles, RenderLayerRole} from 'neuroglancer/renderlayer';
 import {StatusMessage} from 'neuroglancer/status';
@@ -46,7 +46,7 @@ import {SelectionDetailsPanel} from 'neuroglancer/ui/selection_details';
 import {SidePanelManager} from 'neuroglancer/ui/side_panel';
 import {StateEditorDialog} from 'neuroglancer/ui/state_editor';
 import {StatisticsDisplayState, StatisticsPanel} from 'neuroglancer/ui/statistics';
-import {ToolBinder} from 'neuroglancer/ui/tool';
+import {GlobalToolBinder, LocalToolBinder} from 'neuroglancer/ui/tool';
 import {ViewerSettingsPanel, ViewerSettingsPanelState} from 'neuroglancer/ui/viewer_settings';
 import {AutomaticallyFocusedElement} from 'neuroglancer/util/automatic_focus';
 import {TrackableRGB} from 'neuroglancer/util/color';
@@ -68,7 +68,7 @@ import {MousePositionWidget, PositionWidget} from 'neuroglancer/widget/position_
 import {TrackableScaleBarOptions} from 'neuroglancer/widget/scale_bar';
 import {RPC} from 'neuroglancer/worker_rpc';
 
-declare var NEUROGLANCER_OVERRIDE_DEFAULT_VIEWER_OPTIONS: any
+declare var NEUROGLANCER_OVERRIDE_DEFAULT_VIEWER_OPTIONS: any;
 
 interface CreditLink {
   url: string;
@@ -180,6 +180,7 @@ class TrackableViewerState extends CompoundTrackable {
     this.add('relativeDisplayScales', viewer.relativeDisplayScales);
     this.add('displayDimensions', viewer.displayDimensions);
     this.add('position', viewer.position);
+    this.add('velocity', viewer.velocity);
     this.add('crossSectionOrientation', viewer.crossSectionOrientation);
     this.add('crossSectionScale', viewer.crossSectionScale);
     this.add('crossSectionDepth', viewer.crossSectionDepthRange);
@@ -211,6 +212,7 @@ class TrackableViewerState extends CompoundTrackable {
     this.add('layerListPanel', viewer.layerListPanelState);
     this.add('partialViewport', viewer.partialViewport);
     this.add('selectedStateServer', viewer.selectedStateServer);
+    this.add('toolBindings', viewer.toolBinder);
   }
 
   restoreState(obj: any) {
@@ -255,6 +257,7 @@ export class Viewer extends RefCounted implements ViewerState {
   title = new TrackableValue<string|undefined>(undefined, verifyString);
   coordinateSpace = new TrackableCoordinateSpace();
   position = this.registerDisposer(new Position(this.coordinateSpace));
+  velocity = this.registerDisposer(new CoordinateSpacePlaybackVelocity(this.coordinateSpace));
   relativeDisplayScales =
       this.registerDisposer(new TrackableRelativeDisplayScales(this.coordinateSpace));
   displayDimensions = this.registerDisposer(new TrackableDisplayDimensions(this.coordinateSpace));
@@ -400,7 +403,7 @@ export class Viewer extends RefCounted implements ViewerState {
     this.layerSpecification = new TopLevelLayerListSpecification(
         this.display, this.dataSourceProvider, this.layerManager, this.chunkManager,
         this.selectionDetailsState, this.selectedLayer, this.navigationState.coordinateSpace,
-        this.navigationState.pose.position, this.toolBinder);
+        this.navigationState.pose.position, this.globalToolBinder);
 
     this.registerDisposer(display.updateStarted.add(() => {
       this.onUpdateDisplay();
@@ -456,6 +459,8 @@ export class Viewer extends RefCounted implements ViewerState {
     this.registerDisposer(setupPositionDropHandlers(element, this.navigationState.position));
 
     this.state = new TrackableViewerState(this);
+
+    this.registerDisposer(new PlaybackManager(this.display, this.position, this.velocity));
   }
 
   private updateShowBorders() {
@@ -482,7 +487,10 @@ export class Viewer extends RefCounted implements ViewerState {
     topRow.style.alignItems = 'stretch';
 
     const positionWidget = this.registerDisposer(new PositionWidget(
-        this.navigationState.position, this.layerSpecification.coordinateSpaceCombiner));
+        this.navigationState.position, this.layerSpecification.coordinateSpaceCombiner, {
+          velocity: this.velocity,
+          getToolBinder: () => this.toolBinder,
+        }));
     this.registerDisposer(new ElementVisibilityFromTrackableBoolean(
         this.uiControlVisibility.showLocation, positionWidget.element));
     topRow.appendChild(positionWidget.element);
@@ -512,8 +520,8 @@ export class Viewer extends RefCounted implements ViewerState {
       }
     }
 
-    const annotationToolStatus =
-        this.registerDisposer(new AnnotationToolStatusWidget(this.selectedLayer, this.toolBinder));
+    const annotationToolStatus = this.registerDisposer(
+        new AnnotationToolStatusWidget(this.selectedLayer, this.globalToolBinder));
     topRow.appendChild(annotationToolStatus.element);
     this.registerDisposer(new ElementVisibilityFromTrackableBoolean(
         this.uiControlVisibility.showAnnotationToolStatus, annotationToolStatus.element));
@@ -628,8 +636,8 @@ export class Viewer extends RefCounted implements ViewerState {
         new SidePanelManager(this.display, this.layout.element, this.visibility));
     this.registerDisposer(this.sidePanelManager.registerPanel({
       location: this.layerListPanelState.location,
-      makePanel: () =>
-          new LayerListPanel(this.sidePanelManager, this.layerSpecification, this.layerListPanelState),
+      makePanel: () => new LayerListPanel(
+          this.sidePanelManager, this.layerSpecification, this.layerListPanelState),
     }));
     this.registerDisposer(
         new LayerSidePanelManager(this.sidePanelManager, this.selectedLayer.addRef()));
@@ -660,7 +668,7 @@ export class Viewer extends RefCounted implements ViewerState {
               ['3-D projection view', inputEventBindings.perspectiveView]
             ],
             this.layerManager,
-            this.toolBinder,
+            this.globalToolBinder,
         );
       },
     }));
@@ -771,15 +779,18 @@ export class Viewer extends RefCounted implements ViewerState {
 
   private toolInputEventMapBinder = (inputEventMap: EventActionMap, context: RefCounted) => {
     context.registerDisposer(
-          this.inputEventBindings.sliceView.addParent(inputEventMap, Number.POSITIVE_INFINITY));
-    context.registerDisposer(this.inputEventBindings.perspectiveView.addParent(
-          inputEventMap, Number.POSITIVE_INFINITY));
+        this.inputEventBindings.sliceView.addParent(inputEventMap, Number.POSITIVE_INFINITY));
+    context.registerDisposer(
+        this.inputEventBindings.perspectiveView.addParent(inputEventMap, Number.POSITIVE_INFINITY));
   };
-  
-  private toolBinder = this.registerDisposer(new ToolBinder(this.toolInputEventMapBinder));
+
+  private globalToolBinder =
+      this.registerDisposer(new GlobalToolBinder(this.toolInputEventMapBinder));
+
+  public toolBinder = this.registerDisposer(new LocalToolBinder(this, this.globalToolBinder));
 
   activateTool(uppercase: string) {
-    this.toolBinder.activate(uppercase);
+    this.globalToolBinder.activate(uppercase);
   }
 
   editJsonState() {
