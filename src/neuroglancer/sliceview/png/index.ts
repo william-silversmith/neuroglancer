@@ -15,6 +15,7 @@
  */
 
 import pngWasmDataUrl from './libpng.wasm';
+import { wasmModuleInstance } from 'neuroglancer/sliceview/base';
 
 const libraryEnv = {
   emscripten_notify_memory_growth: function () {},
@@ -23,7 +24,13 @@ const libraryEnv = {
   },
 };
 
-const pngModulePromise = (async () => {
+let wasmModule:wasmModuleInstance|null = null;
+
+async function loadPngModule () {
+  if (wasmModule !== null) {
+    return wasmModule;
+  }
+
   const response = await fetch(pngWasmDataUrl);
   const wasmCode = await response.arrayBuffer();
   const m = await WebAssembly.instantiate(wasmCode, {
@@ -31,8 +38,9 @@ const pngModulePromise = (async () => {
     wasi_snapshot_preview1: libraryEnv,
   });
   (m.instance.exports._initialize as Function)();
+  wasmModule = m;
   return m;
-})();
+}
 
 const enum PngColorSpace {
   GRAYSCALE = 0,
@@ -151,7 +159,7 @@ export async function decompressPng(
   convertToGrayscale: boolean
 ) : Promise<Uint8Array> {
   
-  const m = await pngModulePromise;
+  const m = await loadPngModule();
   let {sx,sy,dataWidth,numChannels} = readHeader(buffer);
 
   if (convertToGrayscale) {

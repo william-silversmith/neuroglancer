@@ -272,5 +272,6 @@ jobs:
     - run: ./src/neuroglancer/sliceview/png/build.sh
     - run: ./src/neuroglancer/sliceview/crackle/build.sh
     - run: ./src/neuroglancer/sliceview/fpzip/build.sh
+    - run: ./src/neuroglancer/sliceview/zfpc/build.sh
     # Check that there are no differences.
     - run: git diff --exit-code

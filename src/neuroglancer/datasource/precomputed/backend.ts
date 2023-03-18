@@ -33,6 +33,7 @@ import {decodeCompressoChunk} from 'neuroglancer/sliceview/backend_chunk_decoder
 import {decodeCrackleChunk} from 'neuroglancer/sliceview/backend_chunk_decoders/crackle';
 import {decodeJpegChunk} from 'neuroglancer/sliceview/backend_chunk_decoders/jpeg';
 import {decodePngChunk} from 'neuroglancer/sliceview/backend_chunk_decoders/png';
+import {decodeZfpcChunk} from 'neuroglancer/sliceview/backend_chunk_decoders/zfpc';
 import {decodeRawChunk} from 'neuroglancer/sliceview/backend_chunk_decoders/raw';
 import {decodeFpzipChunk, decodeKempressedChunk} from 'neuroglancer/sliceview/backend_chunk_decoders/fpzip';
 import {VolumeChunk, VolumeChunkSource} from 'neuroglancer/sliceview/volume/backend';
@@ -260,11 +261,15 @@ chunkDecoders.set(VolumeChunkEncoding.COMPRESSED_SEGMENTATION, decodeCompressedS
 chunkDecoders.set(VolumeChunkEncoding.COMPRESSO, decodeCompressoChunk);
 chunkDecoders.set(VolumeChunkEncoding.PNG, decodePngChunk);
 <<<<<<< HEAD
+<<<<<<< HEAD
 chunkDecoders.set(VolumeChunkEncoding.CRACKLE, decodeCrackleChunk);
 =======
 chunkDecoders.set(VolumeChunkEncoding.FPZIP, decodeFpzipChunk);
 chunkDecoders.set(VolumeChunkEncoding.KEMPRESSED, decodeKempressedChunk);
 >>>>>>> wms_fpzip
+=======
+chunkDecoders.set(VolumeChunkEncoding.ZFPC, decodeZfpcChunk);
+>>>>>>> wms_zfpc
 
 @registerSharedObject() export class PrecomputedVolumeChunkSource extends
 (WithParameters(WithSharedCredentialsProviderCounterpart<SpecialProtocolCredentials>()(VolumeChunkSource), VolumeChunkSourceParameters)) {
