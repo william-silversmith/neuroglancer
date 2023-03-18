@@ -15,6 +15,7 @@
  */
 
 import fpzipWasmDataUrl from './libfpzip.wasm';
+import { wasmModuleInstance } from 'neuroglancer/sliceview/base';
 
 const libraryEnv = {
   emscripten_notify_memory_growth: function () {},
@@ -23,7 +24,12 @@ const libraryEnv = {
   },
 };
 
-const fpzipModulePromise = (async () => {
+let wasmModule:wasmModuleInstance|null = null;
+
+async function loadFpzipModule() {
+  if (wasmModule !== null) {
+    return wasmModule;
+  }
   const response = await fetch(fpzipWasmDataUrl);
   const wasmCode = await response.arrayBuffer();
   const m = await WebAssembly.instantiate(wasmCode, {
@@ -32,7 +38,7 @@ const fpzipModulePromise = (async () => {
   });
   (m.instance.exports._initialize as Function)();
   return m;
-})();
+}
 
 export async function decompressFpzip(
   buffer: Uint8Array, 
@@ -67,7 +73,7 @@ async function decompress_helper(
   kempressed: boolean
 ) : Promise<Float32Array> {
   
-  const m = await fpzipModulePromise;
+  const m = await loadFpzipModule();
 
   const nbytes = width * height * depth * bytesPerPixel * numComponents;
   if (nbytes < 0) {
