@@ -34,6 +34,7 @@ import {decodeCrackleChunk} from 'neuroglancer/sliceview/backend_chunk_decoders/
 import {decodeJpegChunk} from 'neuroglancer/sliceview/backend_chunk_decoders/jpeg';
 import {decodePngChunk} from 'neuroglancer/sliceview/backend_chunk_decoders/png';
 import {decodeRawChunk} from 'neuroglancer/sliceview/backend_chunk_decoders/raw';
+import {decodeFpzipChunk, decodeKempressedChunk} from 'neuroglancer/sliceview/backend_chunk_decoders/fpzip';
 import {VolumeChunk, VolumeChunkSource} from 'neuroglancer/sliceview/volume/backend';
 import {fetchSpecialHttpByteRange} from 'neuroglancer/util/byte_range_http_requests';
 import {CancellationToken} from 'neuroglancer/util/cancellation';
@@ -258,7 +259,12 @@ chunkDecoders.set(VolumeChunkEncoding.JPEG, decodeJpegChunk);
 chunkDecoders.set(VolumeChunkEncoding.COMPRESSED_SEGMENTATION, decodeCompressedSegmentationChunk);
 chunkDecoders.set(VolumeChunkEncoding.COMPRESSO, decodeCompressoChunk);
 chunkDecoders.set(VolumeChunkEncoding.PNG, decodePngChunk);
+<<<<<<< HEAD
 chunkDecoders.set(VolumeChunkEncoding.CRACKLE, decodeCrackleChunk);
+=======
+chunkDecoders.set(VolumeChunkEncoding.FPZIP, decodeFpzipChunk);
+chunkDecoders.set(VolumeChunkEncoding.KEMPRESSED, decodeKempressedChunk);
+>>>>>>> wms_fpzip
 
 @registerSharedObject() export class PrecomputedVolumeChunkSource extends
 (WithParameters(WithSharedCredentialsProviderCounterpart<SpecialProtocolCredentials>()(VolumeChunkSource), VolumeChunkSourceParameters)) {
