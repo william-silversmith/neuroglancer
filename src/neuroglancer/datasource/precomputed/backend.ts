@@ -260,16 +260,10 @@ chunkDecoders.set(VolumeChunkEncoding.JPEG, decodeJpegChunk);
 chunkDecoders.set(VolumeChunkEncoding.COMPRESSED_SEGMENTATION, decodeCompressedSegmentationChunk);
 chunkDecoders.set(VolumeChunkEncoding.COMPRESSO, decodeCompressoChunk);
 chunkDecoders.set(VolumeChunkEncoding.PNG, decodePngChunk);
-<<<<<<< HEAD
-<<<<<<< HEAD
 chunkDecoders.set(VolumeChunkEncoding.CRACKLE, decodeCrackleChunk);
-=======
 chunkDecoders.set(VolumeChunkEncoding.FPZIP, decodeFpzipChunk);
 chunkDecoders.set(VolumeChunkEncoding.KEMPRESSED, decodeKempressedChunk);
->>>>>>> wms_fpzip
-=======
 chunkDecoders.set(VolumeChunkEncoding.ZFPC, decodeZfpcChunk);
->>>>>>> wms_zfpc
 
 @registerSharedObject() export class PrecomputedVolumeChunkSource extends
 (WithParameters(WithSharedCredentialsProviderCounterpart<SpecialProtocolCredentials>()(VolumeChunkSource), VolumeChunkSourceParameters)) {
