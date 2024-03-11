@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+import {DecodedImage} from 'src/neuroglancer/async_computation/decode_png_request';
 import pngWasmDataUrl from './libpng.wasm';
 import { wasmModuleInstance } from 'neuroglancer/sliceview/base';
 
@@ -154,10 +155,10 @@ function readHeader(buffer: Uint8Array)
 }
 
 export async function decompressPng(
-  buffer: Uint8Array, width: number, height: number, 
-  numComponents: number, bytesPerPixel:number, 
+  buffer: Uint8Array, width: number|undefined, height: number|undefined, 
+  numComponents: number|undefined, bytesPerPixel:number, 
   convertToGrayscale: boolean
-) : Promise<Uint8Array> {
+) : Promise<DecodedImage> {
   
   const m = await loadPngModule();
   let {sx,sy,dataWidth,numChannels} = readHeader(buffer);
@@ -168,9 +169,9 @@ export async function decompressPng(
   }
 
   if (
-    sx !== width 
-    || sy !== height 
-    || numComponents !== numChannels
+    width !== undefined && sx !== width 
+    || height !== undefined && sy !== height 
+    || numComponents !== undefined && numComponents !== numChannels
     || bytesPerPixel !== dataWidth
   ) {
     throw new Error(
@@ -212,7 +213,7 @@ export async function decompressPng(
     );
     // copy the array so it can be memory managed by JS
     // and we can free the emscripten buffer
-    return image.slice(0);
+    return {width: sx, height: sy, numComponents: numChannels, uint8Array: image.slice(0)};
   }
   finally {
     (m.instance.exports.free as Function)(bufPtr);
