@@ -114,6 +114,33 @@ std::vector<std::vector<uint8_t>> decode_markov_model(
 	return crackle::markov::from_stored_model(stored_model, header.markov_model_order);
 }
 
+// vcg: voxel connectivity graph
+void crack_code_to_vcg(
+  const std::vector<unsigned char>& code,
+  const uint64_t sx, const uint64_t sy,
+  const bool permissible, 
+  const std::vector<std::vector<uint8_t>>& markov_model,
+  uint8_t* slice_edges,
+  int& err
+) {
+	std::vector<uint64_t> nodes = crackle::crackcodes::read_boc_index(code, sx, sy);
+
+	std::vector<uint8_t> codepoints;
+	if (markov_model.size() == 0) {
+		codepoints = crackle::crackcodes::unpack_codepoints(code, sx, sy);
+	}
+	else {
+		uint32_t index_size = 4 + crackle::lib::ctoid(code, 0, 4);
+		std::vector<uint8_t> markov_stream(code.begin() + index_size, code.end());
+		codepoints = crackle::markov::decode_codepoints(markov_stream, markov_model);
+	}
+
+	auto symbol_stream = crackle::crackcodes::codepoints_to_symbols(nodes, codepoints);
+	crackle::crackcodes::decode_crack_code(
+		symbol_stream, sx, sy, permissible, slice_edges, err
+	);
+}
+
 template <typename CCL>
 std::vector<CCL> crack_codes_to_cc_labels(
   const std::vector<std::vector<unsigned char>>& crack_codes,
@@ -126,36 +153,24 @@ std::vector<CCL> crack_codes_to_cc_labels(
 
 	std::vector<uint8_t> edges(sx*sy*sz);
 
+	uint8_t* ptr = edges.data();
+
 	for (uint64_t z = 0; z < crack_codes.size(); z++) {
 		if (crack_codes[z].size() == 0) {
 			continue;
 		}
 
 		auto code = crack_codes[z];
-
-		std::vector<uint64_t> nodes = crackle::crackcodes::read_boc_index(code, sx, sy);
-
-		std::vector<uint8_t> codepoints;
-		if (markov_model.size() == 0) {
-			codepoints = crackle::crackcodes::unpack_codepoints(code, sx, sy);
-		}
-		else {
-			uint32_t index_size = 4 + crackle::lib::ctoid(code, 0, 4);
-			std::vector<uint8_t> markov_stream(code.begin() + index_size, code.end());
-			codepoints = crackle::markov::decode_codepoints(markov_stream, markov_model);
-		}
-
-		auto symbol_stream = crackle::crackcodes::codepoints_to_symbols(nodes, codepoints);
-		std::vector<uint8_t> slice_edges = crackle::crackcodes::decode_crack_code(
-			symbol_stream, sx, sy, 
-			permissible, err
+		crack_code_to_vcg(
+			code, sx, sy,
+			permissible, markov_model,
+			ptr + sxy * z,
+			err
 		);
-	  if (err > 0) {
-			return std::vector<CCL>();
-		}
-		for (uint64_t i = 0; i < sxy; i++) {
-			edges[i + sxy*z] = slice_edges[i];
-		}
+	}
+
+	if (err > 0) {
+		return std::vector<CCL>();
 	}
 
 	return crackle::cc3d::color_connectivity_graph<CCL>(

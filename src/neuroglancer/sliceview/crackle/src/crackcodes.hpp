@@ -150,14 +150,14 @@ std::vector<uint8_t> unpack_codepoints(
 	return codepoints;
 }
 
-std::vector<uint8_t> decode_permissible_crack_code(
+void decode_permissible_crack_code(
 	const robin_hood::unordered_node_map<uint64_t, std::vector<unsigned char>> &chains,
 	const int64_t sx, const int64_t sy,
-	int& err
+	uint8_t* edges, int& err
 ) {
 	// voxel connectivity
 	// four bits: -y-x+y+x true is passable
-	std::vector<uint8_t> edges(sx * sy);
+	std::fill(edges, edges + sx * sy, 0);
 
 	int64_t sxe = sx + 1;
 
@@ -172,8 +172,8 @@ std::vector<uint8_t> decode_permissible_crack_code(
 		for (unsigned char symbol : symbols) {
 			int64_t loc = x + sx * y;
 			if (loc < 0 || loc >= (sx+1) * (sy+1)) {
-				err = 201;
-				return edges;
+				err = 201; 
+				return;
 			}
 
 			if (symbol == 'u') {
@@ -221,18 +221,16 @@ std::vector<uint8_t> decode_permissible_crack_code(
 			}
 		}
 	}
-
-	return edges;
 }
 
-std::vector<uint8_t> decode_impermissible_crack_code(
+void decode_impermissible_crack_code(
 	const robin_hood::unordered_node_map<uint64_t, std::vector<unsigned char>> &chains,
 	const int64_t sx, const int64_t sy,
-	int& err
+	uint8_t* edges, int& err
 ) {
 	// voxel connectivity
 	// four bits: -y-x+y+x true is passable
-	std::vector<uint8_t> edges(sx * sy, 0b1111);
+	std::fill(edges, edges + sx * sy, 0b1111);
 
 	int64_t sxe = sx + 1;
 
@@ -249,7 +247,7 @@ std::vector<uint8_t> decode_impermissible_crack_code(
 
 			if (loc < 0 || loc >= (sx+1) * (sy+1)) {
 				err = 200;
-				return edges;
+				return;
 			}
 
 			if (symbol == 'u') {
@@ -297,23 +295,21 @@ std::vector<uint8_t> decode_impermissible_crack_code(
 			}
 		}
 	}
-
-	return edges;
 }
 
-std::vector<uint8_t> decode_crack_code(
+void decode_crack_code(
 	const robin_hood::unordered_node_map<uint64_t, std::vector<unsigned char>> &chains,
 	const uint64_t sx, const uint64_t sy,
-	const bool permissible, int& err
+	const bool permissible, 
+	uint8_t* slice_edges, int& err
 ) {
 	if (permissible) {
-		return decode_permissible_crack_code(chains, sx, sy, err);
+		decode_permissible_crack_code(chains, sx, sy, slice_edges, err);
 	}
 	else {
-		return decode_impermissible_crack_code(chains, sx, sy, err);
+		decode_impermissible_crack_code(chains, sx, sy, slice_edges, err);
 	}
 }
-
 
 };
 };
