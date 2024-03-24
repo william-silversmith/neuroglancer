@@ -17,7 +17,8 @@ enum DirectionCode {
 	LEFT = 0b11,
 	RIGHT = 0b01,
 	UP = 0b00,
-	DOWN = 0b10
+	DOWN = 0b10,
+	NONE = 255
 };
 
 std::vector<uint64_t> read_boc_index(
@@ -55,13 +56,13 @@ std::vector<uint64_t> read_boc_index(
 	return nodes;
 }
 
-robin_hood::unordered_node_map<uint64_t, std::vector<unsigned char>> 
+std::vector<std::pair<uint64_t, std::vector<unsigned char>> >
 codepoints_to_symbols(
 	const std::vector<uint64_t>& sorted_nodes,
 	const std::vector<uint8_t>& codepoints
 ) {
 
-	robin_hood::unordered_node_map<uint64_t, std::vector<unsigned char>> chains;
+	std::vector<std::pair<uint64_t, std::vector<unsigned char>> > chains;
 
 	std::vector<unsigned char> symbols;
 	symbols.reserve(codepoints.size() * 4 * 2);
@@ -72,6 +73,8 @@ codepoints_to_symbols(
 	char remap[4] = { 'u', 'r', 'd', 'l' };
 
 	uint64_t node_i = 0;
+
+	uint8_t last_move = DirectionCode::NONE;
 
 	for (uint64_t i = 0; i < codepoints.size(); i++) {
 		if (branches_taken == 0) {
@@ -85,35 +88,31 @@ codepoints_to_symbols(
 			continue;
 		}
 
-		auto move = codepoints[i];
-
-		if (symbols.size()) {			
-			if (
-				(move == DirectionCode::UP && symbols.back() == 'd')
-				|| (move == DirectionCode::LEFT && symbols.back() == 'r')
-			) {
-				symbols.back() = 't';
-				branches_taken--;
-			}
-			else if (
-				(move == DirectionCode::DOWN && symbols.back() == 'u')
-				|| (move == DirectionCode::RIGHT && symbols.back() == 'l')
-			) {
-				symbols.back() = 'b';
-				branches_taken++;
-			}
-			else {
-				symbols.push_back(remap[move]);
-			}
-		}
-		else {
+		uint8_t move = codepoints[i];
+	
+		// by chance, up^down and left^right 
+		// both evaluate to 0b10
+		if ((move ^ last_move) != 0b10) {
 			symbols.push_back(remap[move]);
+			last_move = move;
+			continue;
+		}
+		else if (
+			(move == DirectionCode::UP && last_move == DirectionCode::DOWN)
+			|| (move == DirectionCode::LEFT && last_move == DirectionCode::RIGHT)
+		) {
+			symbols.back() = 't';
+			branches_taken--;
+			last_move = DirectionCode::NONE;
+		}
+		else { // the code here is DOWN+UP or RIGHT+LEFT
+			symbols.back() = 'b';
+			branches_taken++;
+			last_move = DirectionCode::NONE;
 		}
 
 		if (branches_taken == 0) {
-			auto vec = chains[node];
-			vec.insert(vec.end(), symbols.begin(), symbols.end());
-			chains[node] = vec;
+			chains.push_back(std::make_pair(node, symbols));
 			symbols.clear();
 		}
 	}
@@ -134,16 +133,15 @@ std::vector<uint8_t> unpack_codepoints(
 	std::vector<uint8_t> codepoints;
 	codepoints.reserve(4 * (code.size() - index_size));
 
+	uint8_t last = 0;
+
 	for (uint64_t i = index_size; i < code.size(); i++) {
 		for (uint64_t j = 0; j < 4; j++) {
 			uint8_t codepoint = static_cast<uint8_t>((code[i] >> (2*j)) & 0b11);
+			codepoint += last;
+			codepoint &= 0b11;
+			last = codepoint;
 			codepoints.push_back(codepoint);
-		}
-	}
-	for (uint64_t i = 1; i < codepoints.size(); i++) {
-		codepoints[i] += codepoints[i-1];
-		if (codepoints[i] > 3) {
-			codepoints[i] -= 4;
 		}
 	}
 
@@ -151,7 +149,7 @@ std::vector<uint8_t> unpack_codepoints(
 }
 
 void decode_permissible_crack_code(
-	const robin_hood::unordered_node_map<uint64_t, std::vector<unsigned char>> &chains,
+	const std::vector<std::pair<uint64_t, std::vector<unsigned char>> > &chains,
 	const int64_t sx, const int64_t sy,
 	uint8_t* edges, int& err
 ) {
@@ -224,7 +222,7 @@ void decode_permissible_crack_code(
 }
 
 void decode_impermissible_crack_code(
-	const robin_hood::unordered_node_map<uint64_t, std::vector<unsigned char>> &chains,
+	const std::vector<std::pair<uint64_t, std::vector<unsigned char>> > &chains,
 	const int64_t sx, const int64_t sy,
 	uint8_t* edges, int& err
 ) {
@@ -298,7 +296,7 @@ void decode_impermissible_crack_code(
 }
 
 void decode_crack_code(
-	const robin_hood::unordered_node_map<uint64_t, std::vector<unsigned char>> &chains,
+	const std::vector<std::pair<uint64_t, std::vector<unsigned char>> > &chains,
 	const uint64_t sx, const uint64_t sy,
 	const bool permissible, 
 	uint8_t* slice_edges, int& err

@@ -142,11 +142,12 @@ void crack_code_to_vcg(
 }
 
 template <typename CCL>
-std::vector<CCL> crack_codes_to_cc_labels(
+CCL* crack_codes_to_cc_labels(
   const std::vector<std::vector<unsigned char>>& crack_codes,
   const uint64_t sx, const uint64_t sy, const uint64_t sz,
   const bool permissible, uint64_t &N,
   const std::vector<std::vector<uint8_t>>& markov_model,
+  CCL* out,
   int& err
 ) {
 	const uint64_t sxy = sx * sy;
@@ -170,13 +171,70 @@ std::vector<CCL> crack_codes_to_cc_labels(
 	}
 
 	if (err > 0) {
-		return std::vector<CCL>();
+		return out;
 	}
 
 	return crackle::cc3d::color_connectivity_graph<CCL>(
-		edges, sx, sy, sz, N
+		edges, sx, sy, sz, out, N
 	);
 }
+
+template <typename LABEL>
+std::vector<LABEL> decode_label_map(
+	const CrackleHeader &header,
+	const std::vector<unsigned char>& binary,
+	const uint32_t* cc_labels,
+	uint64_t N,
+	int64_t z_start,
+	int64_t z_end,
+	int& err
+) {
+	if (header.is_signed) {
+		if (header.stored_data_width == 1) {
+			return crackle::labels::decode_label_map<LABEL, int8_t>(
+				header, binary, cc_labels, N, z_start, z_end, err
+			);
+		}
+		else if (header.stored_data_width == 2) {
+			return crackle::labels::decode_label_map<LABEL, int16_t>(
+				header, binary, cc_labels, N, z_start, z_end, err
+			);
+		}
+		else if (header.stored_data_width == 4) {
+			return crackle::labels::decode_label_map<LABEL, int32_t>(
+				header, binary, cc_labels, N, z_start, z_end, err
+			);
+		}
+		else {
+			return crackle::labels::decode_label_map<LABEL, int64_t>(
+				header, binary, cc_labels, N, z_start, z_end, err
+			);
+		}
+	}
+	else {
+		if (header.stored_data_width == 1) {
+			return crackle::labels::decode_label_map<LABEL, uint8_t>(
+				header, binary, cc_labels, N, z_start, z_end, err
+			);
+		}
+		else if (header.stored_data_width == 2) {
+			return crackle::labels::decode_label_map<LABEL, uint16_t>(
+				header, binary, cc_labels, N, z_start, z_end, err
+			);
+		}
+		else if (header.stored_data_width == 4) {
+			return crackle::labels::decode_label_map<LABEL, uint32_t>(
+				header, binary, cc_labels, N, z_start, z_end, err
+			);
+		}
+		else {
+			return crackle::labels::decode_label_map<LABEL, uint64_t>(
+				header, binary, cc_labels, N, z_start, z_end, err
+			);
+		}
+	}
+}
+
 
 template <typename LABEL>
 LABEL* decompress(
@@ -220,12 +278,15 @@ LABEL* decompress(
 		return output;
 	}
 
+	const bool reuse_output = std::is_same<LABEL, uint32_t>::value && header.fortran_order;
+
 	uint64_t N = 0;
-	std::vector<uint32_t> cc_labels = crack_codes_to_cc_labels<uint32_t>(
+	uint32_t* cc_labels = crack_codes_to_cc_labels<uint32_t>(
 		crack_codes, header.sx, header.sy, szr, 
 		/*permissible=*/(header.crack_format == CrackFormat::PERMISSIBLE), 
 		/*N=*/N,
 		/*markov_model*/markov_model,
+		/*output=*/(reuse_output ? reinterpret_cast<uint32_t*>(output) : NULL),
 		/*err=*/err
 	);
 
@@ -233,51 +294,9 @@ LABEL* decompress(
 		return output;
 	}
 
-	std::vector<LABEL> label_map;
-	if (header.is_signed) {
-		if (header.stored_data_width == 1) {
-			label_map = crackle::labels::decode_label_map<LABEL, int8_t>(
-				header, binary, cc_labels, N, z_start, z_end, err
-			);
-		}
-		else if (header.stored_data_width == 2) {
-			label_map = crackle::labels::decode_label_map<LABEL, int16_t>(
-				header, binary, cc_labels, N, z_start, z_end, err
-			);
-		}
-		else if (header.stored_data_width == 4) {
-			label_map = crackle::labels::decode_label_map<LABEL, int32_t>(
-				header, binary, cc_labels, N, z_start, z_end, err
-			);
-		}
-		else {
-			label_map = crackle::labels::decode_label_map<LABEL, int64_t>(
-				header, binary, cc_labels, N, z_start, z_end, err
-			);
-		}
-	}
-	else {
-		if (header.stored_data_width == 1) {
-			label_map = crackle::labels::decode_label_map<LABEL, uint8_t>(
-				header, binary, cc_labels, N, z_start, z_end, err
-			);
-		}
-		else if (header.stored_data_width == 2) {
-			label_map = crackle::labels::decode_label_map<LABEL, uint16_t>(
-				header, binary, cc_labels, N, z_start, z_end, err
-			);
-		}
-		else if (header.stored_data_width == 4) {
-			label_map = crackle::labels::decode_label_map<LABEL, uint32_t>(
-				header, binary, cc_labels, N, z_start, z_end, err
-			);
-		}
-		else {
-			label_map = crackle::labels::decode_label_map<LABEL, uint64_t>(
-				header, binary, cc_labels, N, z_start, z_end, err
-			);
-		}
-	}
+	std::vector<LABEL> label_map = decode_label_map<LABEL>(
+		header, binary, cc_labels, N, z_start, z_end, err
+	);
 
 	if (err > 0) {
 		return output;
@@ -287,6 +306,10 @@ LABEL* decompress(
 	// b/c that's what Neuroglancer likes
 	for (uint64_t i = 0; i < voxels; i++) {
 		output[i] = label_map[cc_labels[i]];
+	}
+
+	if (!reuse_output) {
+		delete[] cc_labels;
 	}
 
 	return output;
