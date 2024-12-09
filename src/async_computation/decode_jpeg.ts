@@ -53,33 +53,69 @@ registerAsyncComputation(
     }
     numComponents = parser.numComponents;
     let result: Uint8Array;
-    if (parser.numComponents === 1) {
-      result = parser.getData(
-        parser.width,
-        parser.height,
-        /*forceRGBOutput=*/ false,
-      );
-    } else if (parser.numComponents === 3) {
-      result = parser.getData(
-        parser.width,
-        parser.height,
-        /*forceRGBOutput=*/ false,
-      );
-      if (convertToGrayscale) {
-        const length = width * height;
-        const converted = new Uint8Array(length);
-        for (let i = 0; i < length; ++i) {
-          converted[i] = result[i * 3];
+
+    try {
+      const imageDecoder = new ImageDecoder({ data: data.buffer, type: "image/jpeg" });
+      const result = await imageDecoder.decode({ frameIndex: 0 });
+      
+      const videoFrame = result.image;
+
+      const canvas = new OffscreenCanvas(videoFrame.codedWidth, videoFrame.codedHeight);
+      const ctx = canvas.getContext('2d');    
+      ctx.drawImage(videoFrame, 0, 0);
+      
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const rgba = new Uint8Array(imageData.data.buffer);
+
+      result = new Uint8Array(canvas.width * canvas.height);
+
+      if (numComponents === 3) {
+        for (let i = rgba.length - 4; i >= 0; i -= 4) {
+          let j = (i >> 2) * 3;
+          result[j] = rgba[i];
+          result[j+1] = rgba[i+1];
+          result[j+2] = rgba[i+2];
         }
-        result = converted;
+      } else if (numComponents === 1) {
+        for (let i = rgba.length - 4; i >= 0; i -= 4) {
+          result[i >> 2] = rgba[i];
+        }
       } else {
-        result = transposeArray2d(result, parser.width * parser.height, 3);
+        throw new Error(
+          `JPEG data has an unsupported number of components: components=${parser.numComponents}`,
+        );
       }
-    } else {
-      throw new Error(
-        `JPEG data has an unsupported number of components: components=${parser.numComponents}`,
-      );
     }
+    catch {
+      if (parser.numComponents === 1) {
+        result = parser.getData(
+          parser.width,
+          parser.height,
+          /*forceRGBOutput=*/ false,
+        );
+      } else if (parser.numComponents === 3) {
+        result = parser.getData(
+          parser.width,
+          parser.height,
+          /*forceRGBOutput=*/ false,
+        );
+        if (convertToGrayscale) {
+          const length = width * height;
+          const converted = new Uint8Array(length);
+          for (let i = 0; i < length; ++i) {
+            converted[i] = result[i * 3];
+          }
+          result = converted;
+        } else {
+          result = transposeArray2d(result, parser.width * parser.height, 3);
+        }
+      } else {
+        throw new Error(
+          `JPEG data has an unsupported number of components: components=${parser.numComponents}`,
+        );
+      }
+    }
+
     return {
       value: { width, height, numComponents, uint8Array: result },
       transfer: [result.buffer],

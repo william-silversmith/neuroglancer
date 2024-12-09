@@ -13,8 +13,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+// import type { ImageDecoder } from "dom-webcodecs";
 
 import type { DecodedImage } from "#src/async_computation/decode_png_request.js";
+
 
 const libraryEnv = {
   emscripten_notify_memory_growth: () => {},
@@ -208,6 +210,41 @@ export async function decompressPng(
       `png: Failed to decode png image size. image size: ${nbytes}`,
     );
   }
+
+  try {
+    if ((numChannels === 1 || numChannels === 4) && ImageDecoder) {
+      const imageDecoder = new ImageDecoder({ data: buffer.buffer, type: "image/png" });
+      const result = await imageDecoder.decode({ frameIndex: 0 });
+      
+      const videoFrame = result.image;
+
+      const canvas = new OffscreenCanvas(videoFrame.codedWidth, videoFrame.codedHeight);
+      const ctx = canvas.getContext('2d');    
+      ctx.drawImage(videoFrame, 0, 0);
+      
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const rgba = new Uint8Array(imageData.data.buffer);
+
+      let final;
+      if (numChannels === 4) {
+        final = rgba.slice(0);
+      }
+      else {
+        final = new Uint8Array(canvas.width * canvas.height);
+        for (let i = rgba.length - 4; i >= 0; i -= 4) {
+          final[i >> 2] = rgba[i];
+        } 
+      }
+
+      return {
+        width: sx,
+        height: sy,
+        numComponents: numChannels,
+        uint8Array: final,
+      };
+    }
+  }
+  catch {} // in case ImageDecoder is not supported, fall back to WASM
 
   // heap must be referenced after creating bufPtr and imagePtr because
   // memory growth can detatch the buffer.
