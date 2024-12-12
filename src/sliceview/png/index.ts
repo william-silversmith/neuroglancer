@@ -218,19 +218,15 @@ export async function decompressPng(
       
       const videoFrame = result.image;
 
-      const canvas = new OffscreenCanvas(videoFrame.codedWidth, videoFrame.codedHeight);
-      const ctx = canvas.getContext('2d');    
-      ctx.drawImage(videoFrame, 0, 0);
-      
-      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      const rgba = new Uint8Array(imageData.data.buffer);
+      const rgba = new Uint8Array(4 * sx * sy);
+      videoFrame.copyTo(rgba);
 
       let final;
       if (numChannels === 4) {
         final = rgba.slice(0);
       }
       else {
-        final = new Uint8Array(canvas.width * canvas.height);
+        final = new Uint8Array(sx * sy);
         for (let i = rgba.length - 4; i >= 0; i -= 4) {
           final[i >> 2] = rgba[i];
         } 
@@ -244,7 +240,9 @@ export async function decompressPng(
       };
     }
   }
-  catch {} // in case ImageDecoder is not supported, fall back to WASM
+  catch {
+    1;
+  } // in case ImageDecoder is not supported, fall back to WASM
 
   // heap must be referenced after creating bufPtr and imagePtr because
   // memory growth can detatch the buffer.
